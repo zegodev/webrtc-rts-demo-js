@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>音视频通话简易DEMO</title>
+  <style>
+    .container {
+      position: absolute;
+      left:50%;
+      transform: translate(-50%, 0);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+      <video autoplay playsinline style="background-color: black; " id="local-video"></video>
+      <video autoplay playsinline style="background-color: black;" id="remote-video"></video>
+
+    <div>
+      <button id="start">start</button>
+      <button id="connect">connect</button>
+    </div>
+  </div>
+</body>
+<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+<script src="./js/jquery-3.3.1.min.js"></script>
+<script src="./index.js"></script>
+</html>
