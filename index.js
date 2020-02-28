@@ -4,10 +4,12 @@ $(function () {
   let pc2;
   let localVideo = $('#local-video')[0];
   let remoteVideo = $('#remote-video')[0];
-  let hostname = 'hostname';
-  let app = 'app';
-  let stream = 'stream';
+  let hostname = 'udpdispatch-test.zego.im';
+  let app = 'vincentapp';
+  let stream = 'teststream_vincent';
   let nodesUrl = `https://${hostname}/v1/webrtc/getnodes/${app}/${stream}/`
+  let keyNodesUrl = `https://${hostname}/v1/webrtc/sdp/${app}/${stream}/`
+
 
   $('#publish').click(async () => {
     try {
@@ -15,7 +17,7 @@ $(function () {
       console.warn('Received local stream');
       localVideo.srcObject = stream;
       localStream = stream;
-      $('#connect')[0].disabled = false;
+      $('#play')[0].disabled = false;
 
       publish();
     } catch (e) {
@@ -24,7 +26,7 @@ $(function () {
   })
 
   $('#play').click(async function () {
-    play ();
+    play();
     $('#play')[0].disabled = true;
   })
 
@@ -63,18 +65,18 @@ $(function () {
         offerToReceiveAudio: 1,
         offerToReceiveVideo: 1
       })
-      await onCreateOfferSuccess(pc2,offer)
+      await onCreateOfferSuccess(pc2, offer)
     } catch (err) {
       onCreateSessionDescriptionError(err);
     }
   }
 
-  async function onCreateOfferSuccess(pc,desc) {
-    console.warn(`Offer from ${getName(pc)}\n${desc.sdp}`);
+  async function onCreateOfferSuccess(pc, desc) {
+    console.log(`Offer from ${getName(pc)}\n${desc.sdp}`);
     console.log(`${getName(pc)} setLocalDescription start`);
     try {
       await pc.setLocalDescription(desc);
-      onSetLocalSuccess(getName(pc), desc);
+      onSetLocalSuccess(pc, desc);
     } catch (e) {
       onSetSessionDescriptionError(e);
     }
@@ -108,34 +110,21 @@ $(function () {
     console.log(`${getName(pc)} setLocalDescription complete`);
     console.warn(`${getName(pc)} start getnodes`)
 
-    $.post(nodesUrl + (getName(pc) == 'pc1'? 'publish': 'play'), {
-      offer: {
-        sdp: desc
-      }
-    }, res => {
-      let data = res.data
-      if (data.code == 0) {
-        let answer = data.data.answer;
-        let sdp = answer.sdp;
-
-        let answerDescription = {
-          type: 'answer',
-          sdp: sdp,
-          toJSON: () => { }
+    $.ajax({
+      type: 'post',
+      url: nodesUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
+      data: JSON.stringify({
+        offer: {
+          sdp: desc.sdp
         }
-
-        console.warn(getName(pc) + ' start set remote sdp')
-        pc.setRemoteDescription(new RTCSessionDescription(answerDescription)).then(() => {
-          console.warn(getName(pc) + ' set remote success');
-
-        }, err => {
-          console.error(getName(pc) + ' set remote fail ' + err);
-        })
-        nodes = data.data.nodes;
-      } else if (data.code !== 0) {
-        console.error('get nodes fail ' + data.message)
-      }
-    }, 'json')
+      }),
+      success: res => {
+        console.warn('getnodes success')
+        handleNodesRsp(pc, res, desc);
+      },
+      contentType: "application/json",
+      dataType: 'json'
+    })
   }
 
   function onSetSessionDescriptionError(error) {
@@ -144,6 +133,77 @@ $(function () {
 
   function onCreateSessionDescriptionError(error) {
     console.log(`Failed to create session description: ${error.toString()}`);
+  }
+
+  function handleNodesRsp(pc, res, desc) {
+
+    if (res.code == 0) {
+      let data = res.data
+      let answer = data.answer;
+      let sdp = (answer && answer.sdp)? answer.sdp: undefined;
+      let nodes = data.nodes;
+      let serverdata = res.serverdata;
+
+      if (!sdp) {
+        console.warn('no found sdp, use keynodes');
+        sendKeyNodes(pc, nodes[0].key, desc, serverdata);
+        return;
+      }
+
+      handleRemoteSDP (pc, sdp)
+
+    } else if (data.code !== 0) {
+      console.error('get nodes fail ' + data.message)
+    }
+  }
+
+  function sendKeyNodes(pc, key, desc, serverdata) {
+    $.ajax({
+      type: 'POST',
+      url: keyNodesUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
+      crossDomain: true,
+      data: JSON.stringify({
+        offer: {
+          node_key: key,
+          sdp: desc.sdp,
+          serverdata: serverdata
+        }
+      }),
+      success: res => {
+        console.warn('getnodes success')
+        handleKeyNodesRsp(pc, res);
+      },
+      contentType: 'application/json',
+      dataType: 'json'
+    })
+  }
+
+  function handleKeyNodesRsp(pc, res) {
+    if (res.code == 0) {
+      let data = res.data
+      let answer = data.answer;
+      let sdp = (answer && answer.sdp)? answer.sdp: undefined;
+    } else {
+      console.err (`get sdp fail ${res.code} ${res.message}`);
+    }
+  }
+
+  function handleRemoteSDP (pc, sdp) {
+    let answerDescription = {
+      type: 'answer',
+      sdp: sdp,
+      toJSON: () => { }
+    }
+
+    console.warn(getName(pc) + ' start set remote sdp');
+
+    pc.setRemoteDescription(new RTCSessionDescription(answerDescription)).then(() => {
+      console.warn(getName(pc) + ' set remote success');
+
+    }, err => {
+      console.error(getName(pc) + ' set remote fail ' + err);
+
+    })
   }
 
   function getName(pc) {
