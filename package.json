@@ -12,5 +12,6 @@
     "url": "git@gl.zego.im:hannibalchen/webrtc-cdn-demo-js.git"
   },
   "author": "hannibalchen",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {}
 }

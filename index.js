@@ -1,7 +1,7 @@
 $(function () {
   let localStream;
-  let pc1;
-  let pc2;
+  let pc1; //推流
+  let pc2; //拉流
   let localVideo = $('#local-video')[0];
   let remoteVideo = $('#remote-video')[0];
   let hostname = 'udpdispatch-test.zego.im';
@@ -9,6 +9,7 @@ $(function () {
   let stream = 'teststream_vincent';
   let nodesUrl = `https://${hostname}/v1/webrtc/getnodes/${app}/${stream}/`
   let keyNodesUrl = `https://${hostname}/v1/webrtc/sdp/${app}/${stream}/`
+  let localSdpRevert = false;  // 部分浏览器 video和audio顺序是反过来的
 
 
   $('#publish').click(async () => {
@@ -26,8 +27,9 @@ $(function () {
   })
 
   $('#play').click(async function () {
+    localSdpRevert = false;
     play();
-    $('#play')[0].disabled = true;
+    // $('#play')[0].disabled = true;
   })
 
   async function publish() {
@@ -74,9 +76,15 @@ $(function () {
   async function onCreateOfferSuccess(pc, desc) {
     console.log(`Offer from ${getName(pc)}\n${desc.sdp}`);
     console.log(`${getName(pc)} setLocalDescription start`);
+
+    desc.sdp = desc.sdp.replace (/sendrecv/g, getName(pc)? 'sendonly': 'recvonly');
+    getName(pc) == 'pc1' && (desc.sdp = desc.sdp.replace (/useinbandfec=\d+/, 'maxaveragebitrate=' + this.audioBitRate));
+
+    getName(pc) == 'pc1' && /m=video[\s\S]*m=audio/.test (desc.sdp) && (localSdpRevert = true);
+
     try {
       await pc.setLocalDescription(desc);
-      onSetLocalSuccess(pc, desc);
+      onSetLocalDescriptionSuccess(pc, desc);
     } catch (e) {
       onSetSessionDescriptionError(e);
     }
@@ -102,11 +110,11 @@ $(function () {
   function gotRemoteStream(e) {
     if (remoteVideo.srcObject !== e.streams[0]) {
       remoteVideo.srcObject = e.streams[0];
-      console.log('pc2 received remote stream');
+      console.warn('pc2 received remote stream');
     }
   }
 
-  function onSetLocalSuccess(pc, desc) {
+  function onSetLocalDescriptionSuccess(pc, desc) {
     console.log(`${getName(pc)} setLocalDescription complete`);
     console.warn(`${getName(pc)} start getnodes`)
 
@@ -150,7 +158,7 @@ $(function () {
         return;
       }
 
-      handleRemoteSDP (pc, sdp)
+      onGetRemoteOfferSucceses (pc, sdp)
 
     } else if (data.code !== 0) {
       console.error('get nodes fail ' + data.message)
@@ -163,11 +171,9 @@ $(function () {
       url: keyNodesUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
       crossDomain: true,
       data: JSON.stringify({
-        offer: {
           node_key: key,
           sdp: desc.sdp,
           serverdata: serverdata
-        }
       }),
       success: res => {
         console.warn('getnodes success')
@@ -183,12 +189,31 @@ $(function () {
       let data = res.data
       let answer = data.answer;
       let sdp = (answer && answer.sdp)? answer.sdp: undefined;
+
+      onGetRemoteOfferSucceses(pc, sdp)
     } else {
-      console.err (`get sdp fail ${res.code} ${res.message}`);
+      console.error (`get sdp fail reason ${res.code} ${res.message}`);
     }
   }
 
-  function handleRemoteSDP (pc, sdp) {
+  function onGetRemoteOfferSucceses (pc, sdp) {
+    if (localSdpRevert) {
+
+      let [headerSdp, videoSdp, audioSdp] = [
+              /[\s\S]*m=audio/.exec (sdp)[0].replace ('m=audio', ''),
+              /m=video[\s\S]*/.exec (sdp)[0],
+              /m=audio[\s\S]*m=video/.exec (sdp)[0].replace ('m=video', ''),
+      ];
+
+      let mids = /a=group:BUNDLE\s+(\w+)\s+(\w+)/.exec (headerSdp);
+
+      headerSdp = headerSdp.replace (/a=group:BUNDLE\s+(\w+)\s+(\w+)/, 'a=group:BUNDLE ' + mids[2] + ' ' + mids[1]);
+
+      sdp = headerSdp + videoSdp + audioSdp;
+      console.log('remoteSdp:',sdp);
+    }
+
+
     let answerDescription = {
       type: 'answer',
       sdp: sdp,
@@ -198,7 +223,7 @@ $(function () {
     console.warn(getName(pc) + ' start set remote sdp');
 
     pc.setRemoteDescription(new RTCSessionDescription(answerDescription)).then(() => {
-      console.warn(getName(pc) + ' set remote success');
+      console.warn(getName(pc) + ' set remote sdp success');
 
     }, err => {
       console.error(getName(pc) + ' set remote fail ' + err);
