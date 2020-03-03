@@ -4,11 +4,10 @@ $(function () {
   let pc2; //拉流
   let localVideo = $('#local-video')[0];
   let remoteVideo = $('#remote-video')[0];
-  let hostname = 'udpdispatch-test.zego.im';
-  let app = 'vincentapp';
-  let stream = 'teststream_vincent';
+  let hostname = $('#hostname').val();
+  let app = $('#app').val();
+  let stream = $('#stream').val();
   let nodesUrl = `https://${hostname}/v1/webrtc/getnodes/${app}/${stream}/`
-  let keyNodesUrl = `https://${hostname}/v1/webrtc/sdp/${app}/${stream}/`
   let localSdpRevert = false;  // 部分浏览器 video和audio顺序是反过来的
 
 
@@ -37,7 +36,7 @@ $(function () {
 
     pc1 = new RTCPeerConnection();
     pc1.addEventListener('icecandidate', e => onIceCandidate('pc1', e));
-    pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange('pc1', e));
+    pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
 
     localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
 
@@ -58,7 +57,7 @@ $(function () {
 
     pc2 = new RTCPeerConnection();
     pc2.addEventListener('icecandidate', e => onIceCandidate('pc2', e));
-    pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange('pc2', e));
+    pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc2, e));
     pc2.addEventListener('track', gotRemoteStream);
 
     try {
@@ -102,7 +101,7 @@ $(function () {
 
   function onIceStateChange(pc, event) {
     if (pc) {
-      console.log(`${pc} ICE state: ${pc.iceConnectionState}`);
+      console.warn(`${getName(pc)} ICE state: ${pc.iceConnectionState}`);
       console.log('ICE state change event: ', event);
     }
   }
@@ -151,6 +150,7 @@ $(function () {
       let sdp = (answer && answer.sdp)? answer.sdp: undefined;
       let nodes = data.nodes;
       let serverdata = res.serverdata;
+      //sendKeyNodes(pc, nodes[0].key, desc, serverdata);
 
       if (!sdp) {
         console.warn('no found sdp, use keynodes');
@@ -166,13 +166,16 @@ $(function () {
   }
 
   function sendKeyNodes(pc, key, desc, serverdata) {
+    let keyNodesUrl = `https://${key}/v1/webrtc/sdp/${app}/${stream}/`
     $.ajax({
       type: 'POST',
       url: keyNodesUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
       crossDomain: true,
       data: JSON.stringify({
           node_key: key,
-          sdp: desc.sdp,
+          offer: {
+            sdp: desc.sdp
+          },
           serverdata: serverdata
       }),
       success: res => {

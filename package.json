@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "http-server ./ -p 8082 -S -C cert.pem -K key.pem"
+    "start": "http-server ./ -p 8084 -S -C cert.pem -K key.pem"
   },
   "repository": {
     "type": "git",
