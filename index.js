@@ -7,8 +7,10 @@ $(function () {
   let hostname = $('#hostname').val();
   let app = $('#app').val();
   let stream = $('#stream').val();
-  let nodesUrl = `https://${hostname}/v1/webrtc/getnodes/${app}/${stream}/`
+  let nodesUrl = `https://${hostname}/v1/webrtc/getnodes/${app}/${stream}/`;
   let localSdpRevert = false;  // 部分浏览器 video和audio顺序是反过来的
+  let videoDecodeType = $('#videoCodeType').val() || 'H264';
+  let audioBitRate = $('#audioBitrate').val() * 1 || 48000;
 
 
   $('#publish').click(async () => {
@@ -76,10 +78,12 @@ $(function () {
     console.log(`Offer from ${getName(pc)}\n${desc.sdp}`);
     console.log(`${getName(pc)} setLocalDescription start`);
 
-    desc.sdp = desc.sdp.replace (/sendrecv/g, getName(pc)? 'sendonly': 'recvonly');
-    getName(pc) == 'pc1' && (desc.sdp = desc.sdp.replace (/useinbandfec=\d+/, 'maxaveragebitrate=' + this.audioBitRate));
+    desc.sdp = desc.sdp.replace(/sendrecv/g, getName(pc) ? 'sendonly' : 'recvonly');
+    getName(pc) == 'pc1' && (desc.sdp = desc.sdp.replace(/useinbandfec=\d+/, 'maxaveragebitrate=' + audioBitRate));
 
-    getName(pc) == 'pc1' && /m=video[\s\S]*m=audio/.test (desc.sdp) && (localSdpRevert = true);
+    getName(pc) == 'pc1' && /m=video[\s\S]*m=audio/.test(desc.sdp) && (localSdpRevert = true);
+
+    desc.sdp = getSDPByVideDecodeType (desc.sdp, videoDecodeType);
 
     try {
       await pc.setLocalDescription(desc);
@@ -147,7 +151,7 @@ $(function () {
     if (res.code == 0) {
       let data = res.data
       let answer = data.answer;
-      let sdp = (answer && answer.sdp)? answer.sdp: undefined;
+      let sdp = (answer && answer.sdp) ? answer.sdp : undefined;
       let nodes = data.nodes;
       let serverdata = res.serverdata;
       //sendKeyNodes(pc, nodes[0].key, desc, serverdata);
@@ -158,7 +162,7 @@ $(function () {
         return;
       }
 
-      onGetRemoteOfferSucceses (pc, sdp)
+      onGetRemoteOfferSucceses(pc, sdp)
 
     } else if (data.code !== 0) {
       console.error('get nodes fail ' + data.message)
@@ -172,11 +176,11 @@ $(function () {
       url: keyNodesUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
       crossDomain: true,
       data: JSON.stringify({
-          node_key: key,
-          offer: {
-            sdp: desc.sdp
-          },
-          serverdata: serverdata
+        node_key: key,
+        offer: {
+          sdp: desc.sdp
+        },
+        serverdata: serverdata
       }),
       success: res => {
         console.warn('getnodes success')
@@ -191,29 +195,29 @@ $(function () {
     if (res.code == 0) {
       let data = res.data
       let answer = data.answer;
-      let sdp = (answer && answer.sdp)? answer.sdp: undefined;
+      let sdp = (answer && answer.sdp) ? answer.sdp : undefined;
 
       onGetRemoteOfferSucceses(pc, sdp)
     } else {
-      console.error (`get sdp fail reason ${res.code} ${res.message}`);
+      console.error(`get sdp fail reason ${res.code} ${res.message}`);
     }
   }
 
-  function onGetRemoteOfferSucceses (pc, sdp) {
+  function onGetRemoteOfferSucceses(pc, sdp) {
     if (localSdpRevert) {
 
       let [headerSdp, videoSdp, audioSdp] = [
-              /[\s\S]*m=audio/.exec (sdp)[0].replace ('m=audio', ''),
-              /m=video[\s\S]*/.exec (sdp)[0],
-              /m=audio[\s\S]*m=video/.exec (sdp)[0].replace ('m=video', ''),
+        /[\s\S]*m=audio/.exec(sdp)[0].replace('m=audio', ''),
+        /m=video[\s\S]*/.exec(sdp)[0],
+        /m=audio[\s\S]*m=video/.exec(sdp)[0].replace('m=video', ''),
       ];
 
-      let mids = /a=group:BUNDLE\s+(\w+)\s+(\w+)/.exec (headerSdp);
+      let mids = /a=group:BUNDLE\s+(\w+)\s+(\w+)/.exec(headerSdp);
 
-      headerSdp = headerSdp.replace (/a=group:BUNDLE\s+(\w+)\s+(\w+)/, 'a=group:BUNDLE ' + mids[2] + ' ' + mids[1]);
+      headerSdp = headerSdp.replace(/a=group:BUNDLE\s+(\w+)\s+(\w+)/, 'a=group:BUNDLE ' + mids[2] + ' ' + mids[1]);
 
       sdp = headerSdp + videoSdp + audioSdp;
-      console.log('remoteSdp:',sdp);
+      console.log('remoteSdp:', sdp);
     }
 
 
@@ -232,6 +236,124 @@ $(function () {
       console.error(getName(pc) + ' set remote fail ' + err);
 
     })
+  }
+
+  function getSDPByVideDecodeType(sdp, type) {
+    let videoDecodeTypes = {
+      str: '',
+      arr: [],
+      obj: {
+        'H264': [],
+        'H265': [],
+        'VP8': [],
+        'VP9': [],
+        'OHTER': [],
+      }
+    }
+
+    if (!sdp.includes('m=video')) {
+      return sdp;
+    }
+
+    let videoHead = /m=video.+/.exec(sdp)[0];
+    videoHead = videoHead.match(/[\s|\d]+/g)[1].replace(' ', '')
+
+    videoDecodeTypes.str = videoHead;
+    videoDecodeTypes.arr = videoDecodeTypes.str.split(' ');
+    videoDecodeTypes.arr.forEach(decodeType => {
+      let reg = new RegExp('a=rtpmap:' + decodeType + '.+');
+      let matched = reg.exec(sdp)[0];
+      if (matched.includes('H264')) {
+        videoDecodeTypes.obj.H264.push(decodeType);
+      } else if (matched.includes('H265')) {
+        videoDecodeTypes.obj.H265.push(decodeType);
+      } else if (matched.includes('VP8')) {
+        videoDecodeTypes.obj.VP8.push(decodeType);
+      } else if (matched.includes('VP9')) {
+        videoDecodeTypes.obj.VP9.push(decodeType);
+      } else {
+        videoDecodeTypes.obj.OHTER.push(decodeType);
+      }
+    });
+
+
+    videoDecodeTypes.obj.OHTER.forEach(otherType => {
+      let reg = new RegExp('a=fmtp:' + otherType + '.+apt=(\\d+)');
+      let matchedArr = reg.exec(sdp);
+      let matched = matchedArr && matchedArr[1];
+      if (matched) {
+        if (videoDecodeTypes.obj.H264.includes(matched)) {
+          videoDecodeTypes.obj.H264.push(otherType);
+        } else if (videoDecodeTypes.obj.H265.includes(matched)) {
+          videoDecodeTypes.obj.H265.push(otherType);
+        } else if (videoDecodeTypes.obj.VP8.includes(matched)) {
+          videoDecodeTypes.obj.VP8.push(otherType);
+        } else if (videoDecodeTypes.obj.VP9.includes(matched)) {
+          videoDecodeTypes.obj.VP9.push(otherType);
+        }
+      }
+    });
+
+    let targetArr = [];
+    if (type === 'VP9') {
+      targetArr = [
+        // ...videoDecodeTypes.obj.OHTER,
+        ...videoDecodeTypes.obj.H265,
+        ...videoDecodeTypes.obj.H264,
+        ...videoDecodeTypes.obj.VP8,
+      ];
+    } else if (type === 'VP8') {
+      targetArr = [
+        // ...videoDecodeTypes.obj.OHTER,
+        ...videoDecodeTypes.obj.H265,
+        ...videoDecodeTypes.obj.H264,
+        ...videoDecodeTypes.obj.VP9,
+      ];
+    } else if (type === 'H264') {
+      targetArr = [
+        // ...videoDecodeTypes.obj.OHTER,
+        ...videoDecodeTypes.obj.H265,
+        ...videoDecodeTypes.obj.VP8,
+        ...videoDecodeTypes.obj.VP9,
+      ];
+    } else if (type === 'H265') {
+      targetArr = [
+        //...videoDecodeTypes.obj.OHTER,
+        ...videoDecodeTypes.obj.VP8,
+        ...videoDecodeTypes.obj.H264,
+        ...videoDecodeTypes.obj.VP9,
+      ];
+    }
+
+    // targetArr.forEach(itype => {
+    //         let currentIndex = videoDecodeTypes.arr.indexOf(itype);
+    //         let reg;
+    //         if( currentIndex!==(videoDecodeTypes.arr.length - 1)){
+    //                 reg = new RegExp('a=rtpmap:' + itype + '[\\s\\S]+a=rtpmap:' + videoDecodeTypes.arr[currentIndex+1])
+    //                 sdp = sdp.replace(reg, 'a=rtpmap:' + videoDecodeTypes.arr[currentIndex+1]);
+    //         }else{
+    //                 reg = new RegExp ('a=rtpmap:' + itype + '[\\s\\S]+a=fmtp:' + itype + '.+\\s\\n')
+    //                 sdp = sdp.replace(reg, '');
+    //         }
+    //         videoDecodeTypes.arr.splice(currentIndex,1)
+    //         //console.log('targetArr',reg)
+    // });
+
+    targetArr.forEach(itype => {
+      let currentIndex = videoDecodeTypes.arr.indexOf(itype);
+      videoDecodeTypes.arr.splice(currentIndex, 1);
+
+      let regRtpmap = new RegExp('a=rtpmap:' + itype + '.+\\s\\n', 'g');
+      let regRtcpfb = new RegExp('a=rtcp-fb:' + itype + '.+\\s\\n', 'g');
+      let regFmtp = new RegExp('a=fmtp:' + itype + '.+\\s\\n', 'g');
+
+      sdp = sdp.replace(regRtpmap, '');
+      sdp = sdp.replace(regRtcpfb, '');
+      sdp = sdp.replace(regFmtp, '');
+    });
+
+    sdp = sdp.replace(videoHead, videoDecodeTypes.arr.join(' '))
+    return sdp;
   }
 
   function getName(pc) {
