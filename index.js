@@ -4,10 +4,6 @@ $(function () {
   let pc2; //拉流
   let localVideo = $('#local-video')[0];
   let remoteVideo = $('#remote-video')[0];
-  let hostname = $('#hostname').val();
-  let app = $('#app').val();
-  let stream = $('#stream').val();
-  let nodesUrl = `https://${hostname}/v1/webrtc/getnodes/${app}/${stream}/`;
   let localSdpRevert = false;  // 部分浏览器 video和audio顺序是反过来的
   let videoDecodeType = $('#videoCodeType').val() || 'H264';
   let audioBitRate = $('#audioBitrate').val() * 1 || 48000;
@@ -123,7 +119,7 @@ $(function () {
 
     $.ajax({
       type: 'post',
-      url: nodesUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
+      url: `https://${$('#hostname').val()}/v1/webrtc/getnodes/${$('#app').val()}/${$('#stream').val()}/` + (getName(pc) == 'pc1' ? 'publish' : 'play'),
       data: JSON.stringify({
         offer: {
           sdp: desc.sdp
@@ -170,10 +166,9 @@ $(function () {
   }
 
   function sendKeyNodes(pc, key, desc, serverdata) {
-    let keyNodesUrl = `https://${key}/v1/webrtc/sdp/${app}/${stream}/`
     $.ajax({
       type: 'POST',
-      url: keyNodesUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
+      url: `https://${key}/v1/webrtc/sdp/${$('#app').val()}/${$('#stream').val()}/` + (getName(pc) == 'pc1' ? 'publish' : 'play'),
       crossDomain: true,
       data: JSON.stringify({
         node_key: key,
