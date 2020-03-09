@@ -7,6 +7,9 @@ $(function () {
   let localSdpRevert = false;  // 部分浏览器 video和audio顺序是反过来的
   let videoDecodeType = $('#videoCodeType').val() || 'H264';
   let audioBitRate = $('#audioBitrate').val() * 1 || 48000;
+  let app = 'wertc-cdn-test';
+  let stream = 'teststream_vincent';
+  let nodeUrl = `https://udp-dispatch-wertcdn.zego.im/v1/webrtc/getnodes/${app}/${stream}/`;
 
 
   $('#publish').click(async () => {
@@ -119,7 +122,7 @@ $(function () {
 
     $.ajax({
       type: 'post',
-      url: `https://${$('#hostname').val()}/v1/webrtc/getnodes/${$('#app').val()}/${$('#stream').val()}/` + (getName(pc) == 'pc1' ? 'publish' : 'play'),
+      url: nodeUrl + (getName(pc) == 'pc1' ? 'publish' : 'play'),
       data: JSON.stringify({
         offer: {
           sdp: desc.sdp
@@ -160,15 +163,15 @@ $(function () {
 
       onGetRemoteOfferSucceses(pc, sdp)
 
-    } else if (data.code !== 0) {
-      console.error('get nodes fail ' + data.message)
+    } else if (res.code !== 0) {
+      console.error('get nodes fail ' + res.message)
     }
   }
 
   function sendKeyNodes(pc, key, desc, serverdata) {
     $.ajax({
       type: 'POST',
-      url: `https://${key}/v1/webrtc/sdp/${$('#app').val()}/${$('#stream').val()}/` + (getName(pc) == 'pc1' ? 'publish' : 'play'),
+      url: `https://${key}/v1/webrtc/sdp/${app}/${stream}/` + (getName(pc) == 'pc1' ? 'publish' : 'play'),
       crossDomain: true,
       data: JSON.stringify({
         node_key: key,
