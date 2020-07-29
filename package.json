@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "http-server ./ -p 8084 -S -C cert.pem -K key.pem"
+    "dev": "http-server -S -p 8084 -o -w ./",
+    "start": "http-server -S -p 8084 -o ./"
   },
   "repository": {
     "type": "git",
@@ -13,5 +14,8 @@
   },
   "author": "hannibalchen",
   "license": "ISC",
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "http-server": "^0.12.3"
+  }
 }
