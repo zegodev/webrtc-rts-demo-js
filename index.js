@@ -1,33 +1,34 @@
-const app = 'wertc-cdn-test';
-const stream = 'teststream_vincent';
-let videoDecodeType, audioBitRate;
+let videoDecodeType, audioBitRate, hostname, streamName, app, stream;
 
 // type: 'publish' || 'play'
-const getNodeUrl = ({type = 'publish', app, stream}) =>
-  `https://udp-dispatch-wertcdn.zego.im/v1/webrtc/getnodes/${app}/${stream}/${type}`;
+const getNodeUrl = ({hostname = '', type = 'publish', app, stream}) =>
+  `https://${hostname}/v1/webrtc/getnodes/${app}/${stream}/${type}`;
 
 // type: 'publish' || 'play'
-const getRemoteUrl = ({domain = '', type = 'publish', app, stream}) =>
-  `https://${domain}/v1/webrtc/sdp/${app}/${stream}/${type}`;
+const getRemoteUrl = ({hostname = '', type = 'publish', app, stream}) =>
+  `https://${hostname}/v1/webrtc/sdp/${app}/${stream}/${type}`;
 
 const RTCOfferOptions = {
   offerToReceiveAudio: 1,
   offerToReceiveVideo: 1,
 };
 
-let localVideo = $('#local-video')[0];
-let remoteVideo = $('#remote-video')[0];
+let $localVideo = $('#local-video').get(0);
+let $remoteVideo = $('#remote-video').get(0);
 
 $('#publish').click(async () => {
   try {
-    videoDecodeType = $('#videoCodeType').val() || 'H264';
-    audioBitRate = $('#audioBitrate').val() * 1 || 48000;
+    videoDecodeType = $('#videoCodeType').val();
+    audioBitRate = parseInt($('#audioBitrate').val(), 10);
+    hostname = $('#hostname').val();
+    streamName = $('#stream').val();
+    app = $('#app').val();
 
-    const stream = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: true,
     });
-    localVideo.srcObject = stream;
+    $localVideo.srcObject = stream;
 
     try {
       const pc = createPC();
@@ -52,8 +53,8 @@ $('#play').click(async function () {
 
     pc.addEventListener('track', (e) => {
       // run twice
-      if (remoteVideo.srcObject !== e.streams[0]) {
-        remoteVideo.srcObject = e.streams[0];
+      if ($remoteVideo.srcObject !== e.streams[0]) {
+        $remoteVideo.srcObject = e.streams[0];
       }
     });
 
@@ -64,6 +65,10 @@ $('#play').click(async function () {
   } catch (e) {
     errorHandle('createOffer', e);
   }
+});
+
+$('#stop').click(function () {
+  stream.getTracks().forEach(track => track.stop());
 });
 
 function createPC() {
@@ -94,9 +99,10 @@ async function handlePC(pc, offer, type) {
     await pc.setLocalDescription(offer);
 
     const getNodesUrl = getNodeUrl({
+      hostname,
       type,
       app,
-      stream,
+      stream: streamName,
     });
     const {
       data: {nodes},
@@ -121,10 +127,10 @@ async function handlePC(pc, offer, type) {
       log('IP', key);
 
       const remoteUrl = getRemoteUrl({
-        domain: key,
+        hostname: key,
         type,
         app,
-        stream,
+        stream: streamName,
       });
       const {data: remoteDescription} = await ajaxPost(remoteUrl, {
         node_key: key,
