@@ -1,4 +1,4 @@
-let videoDecodeType, audioBitRate, hostname, streamName, app, stream;
+let videoDecodeType, audioBitRate, hostname, streamName, app, stream, auth, key;
 
 // type: 'publish' || 'play'
 const getNodeUrl = ({hostname = '', type = 'publish', app, stream}) =>
@@ -23,6 +23,12 @@ $('#publish').click(async () => {
     hostname = $('#hostname').val();
     streamName = $('#stream').val();
     app = $('#app').val();
+    auth = $('#auth').prop('checked');
+    key = $('#key').val();
+
+    if (auth && !key.trim()) {
+      return alert('请输入 key');
+    }
 
     stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
@@ -68,7 +74,16 @@ $('#play').click(async function () {
 });
 
 $('#stop').click(function () {
-  stream.getTracks().forEach(track => track.stop());
+  stream.getTracks().forEach((track) => track.stop());
+});
+
+$('#auth').click(function () {
+  const $formKey = $('#form-key');
+  if ($(this).prop('checked')) {
+    $formKey.removeClass('d-none');
+  } else {
+    $formKey.addClass('d-none');
+  }
 });
 
 function createPC() {
@@ -104,14 +119,19 @@ async function handlePC(pc, offer, type) {
       app,
       stream: streamName,
     });
-    const {
-      data: {nodes},
-      serverdata,
-    } = await ajaxPost(getNodesUrl, {
+    let getNodesData = {
       offer: {
         sdp: offer.sdp,
       },
-    });
+    };
+    if (auth) {
+      getNodesData = useSign(getNodesData, type);
+    }
+    // 调取服务端接口获取 node 节点
+    const {
+      data: {nodes},
+      serverdata,
+    } = await ajaxPost(getNodesUrl, getNodesData);
     log('nodes', nodes);
 
     let count = 0,
@@ -123,22 +143,30 @@ async function handlePC(pc, offer, type) {
 
     while (nodes.length) {
       count++;
-      const key = nodes.shift().key;
-      log('IP', key);
+      const ip = nodes.shift().key;
+      log('IP', ip);
 
       const remoteUrl = getRemoteUrl({
-        hostname: key,
+        hostname: ip,
         type,
         app,
         stream: streamName,
       });
-      const {data: remoteDescription} = await ajaxPost(remoteUrl, {
-        node_key: key,
+      let getRemoteUrlData = {
+        node_key: ip,
         offer: {
           sdp: offer.sdp,
         },
         serverdata,
-      });
+      };
+      if (auth) {
+        getRemoteUrlData = useSign(getRemoteUrlData, type);
+      }
+      // 调取服务端接口获取 remoteDescription
+      const {data: remoteDescription} = await ajaxPost(
+        remoteUrl,
+        getRemoteUrlData
+      );
       log('remoteDescription', remoteDescription);
 
       const answerDescription = {
@@ -247,6 +275,35 @@ function formatSdpByDecodeType(sdp, type) {
   return sdp.replace(videoHead, videoDecodeTypesArr.join(' '));
 }
 
+function useSign(data, type) {
+  const time = Date.now();
+  const nonce = (Date.now() + Math.random()).toString(32);
+  const paramData = {
+    ...data,
+
+    time,
+    nonce,
+
+    app,
+    stream: streamName,
+    type,
+  };
+  let signStr, sign;
+  // !offer 取 sdp 的值
+  paramData.offer = paramData.offer.sdp;
+  signStr = normalizeParams(paramData) + `&key=${key}`;
+  log('get sign string', signStr);
+  sign = md5(signStr);
+  log('sign', sign);
+
+  return {
+    ...data,
+    time,
+    nonce,
+    sign,
+  };
+}
+
 // 创建本地连接，提供 offer
 function ajaxPost(url, data) {
   return $.ajax({
@@ -267,4 +324,8 @@ function errorHandle(name, e) {
 function log(name, msg) {
   console.warn(`${name} =>`);
   console.log(msg);
+}
+
+function normalizeParams(data) {
+  return Object.keys(data).sort().map(key => `${key}=${data[key]}`).join('&')
 }
