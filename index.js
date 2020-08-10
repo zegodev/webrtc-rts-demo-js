@@ -112,8 +112,9 @@ function formatOffer(offer, type = 'publish') {
 async function handlePC(pc, offer, type) {
   try {
     await pc.setLocalDescription(offer);
+    let signData;
 
-    const getNodesUrl = getNodeUrl({
+    let getNodesUrl = getNodeUrl({
       hostname,
       type,
       app,
@@ -125,7 +126,8 @@ async function handlePC(pc, offer, type) {
       },
     };
     if (auth) {
-      getNodesData = useSign(getNodesData, type);
+      signData = useSign(getNodesData, type);
+      getNodesUrl = `${getNodesUrl}?${normalizeParams(signData)}`
     }
     // 调取服务端接口获取 node 节点
     const {
@@ -146,7 +148,7 @@ async function handlePC(pc, offer, type) {
       const ip = nodes.shift().key;
       log('IP', ip);
 
-      const remoteUrl = getRemoteUrl({
+      let remoteUrl = getRemoteUrl({
         hostname: ip,
         type,
         app,
@@ -160,7 +162,8 @@ async function handlePC(pc, offer, type) {
         serverdata,
       };
       if (auth) {
-        getRemoteUrlData = useSign(getRemoteUrlData, type);
+        signData = useSign(getRemoteUrlData, type);
+        remoteUrl = `${remoteUrl}?${normalizeParams(signData)}`
       }
       // 调取服务端接口获取 remoteDescription
       const {data: remoteDescription} = await ajaxPost(
@@ -297,7 +300,6 @@ function useSign(data, type) {
   log('sign', sign);
 
   return {
-    ...data,
     time,
     nonce,
     sign,
