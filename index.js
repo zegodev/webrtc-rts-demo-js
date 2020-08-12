@@ -47,7 +47,7 @@ $('#publish').click(async () => {
       const formattedOffer = formatOffer(offer, type);
       await handlePC(pc, formattedOffer, type);
       const endtime = Date.now();
-      log('play time', endtime - starttime);
+      log(`${type} time`, endtime - starttime);
     } catch (e) {
       errorHandle('createOffer', e);
     }
@@ -73,7 +73,7 @@ $('#play').click(async function () {
     const formattedOffer = formatOffer(offer, type);
     await handlePC(pc, formattedOffer, type);
     const endtime = Date.now();
-    log('play time', endtime - starttime);
+    log(`${type} time`, endtime - starttime);
   } catch (e) {
     errorHandle('createOffer', e);
   }
