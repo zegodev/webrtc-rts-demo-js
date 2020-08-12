@@ -38,6 +38,7 @@ $('#publish').click(async () => {
 
     try {
       const pc = createPC();
+      const starttime = Date.now();
       // ! addTrack before createOffer
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
       const offer = await pc.createOffer(RTCOfferOptions);
@@ -45,6 +46,8 @@ $('#publish').click(async () => {
       const type = 'publish';
       const formattedOffer = formatOffer(offer, type);
       await handlePC(pc, formattedOffer, type);
+      const endtime = Date.now();
+      log('play time', endtime - starttime);
     } catch (e) {
       errorHandle('createOffer', e);
     }
@@ -55,6 +58,7 @@ $('#publish').click(async () => {
 
 $('#play').click(async function () {
   try {
+    const starttime = Date.now();
     const pc = createPC();
 
     pc.addEventListener('track', (e) => {
@@ -68,6 +72,8 @@ $('#play').click(async function () {
     const type = 'play';
     const formattedOffer = formatOffer(offer, type);
     await handlePC(pc, formattedOffer, type);
+    const endtime = Date.now();
+    log('play time', endtime - starttime);
   } catch (e) {
     errorHandle('createOffer', e);
   }
